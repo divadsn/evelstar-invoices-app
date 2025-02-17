@@ -4,17 +4,22 @@ version = "0.1.0"
 description = ""
 authors = ["David Sn <divad.nnamtdeis@gmail.com>"]
 readme = "README.md"
+package-mode = false
 
 [tool.poetry.dependencies]
 python = ">=3.12,<3.14"
+appdirs = "^1.4.4"
+async-tkinter-loop = "^0.9.3"
+azure-ai-formrecognizer = "^3.3.3"
+beautifulsoup4 = "^4.13.3"
+customtkinter = "^5.2.2"
 httpx = "^0.28.1"
+pdf2image = "^1.17.0"
 pillow = "^11.1.0"
 pyjwt = "^2.10.1"
-pdf2image = "^1.17.0"
-beautifulsoup4 = "^4.13.3"
-azure-ai-formrecognizer = "^3.3.3"
 
 [tool.poetry.group.dev.dependencies]
+black = "^25.1.0"
 pyinstaller = "^6.12.0"
 
 [build-system]

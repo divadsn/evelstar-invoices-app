@@ -29,5 +29,8 @@ class EvelstarAPIClient:
     async def get_invoice(self, invoice_id: str) -> dict:
         return await self.fetch("GET", f"/v1/invoices/{invoice_id}")
 
+    async def upload_invoice(self, file_path: str) -> dict:
+        pass
+
     async def close(self):
         await self._client.aclose()
