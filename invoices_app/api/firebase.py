@@ -2,7 +2,7 @@ import json
 import re
 
 from bs4 import BeautifulSoup
-from httpx import AsyncClient, HTTPStatusError
+from httpx import AsyncClient, Client, HTTPStatusError
 
 BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0"
 
@@ -21,6 +21,7 @@ class FirebaseAuthClient:
         self._client = AsyncClient(headers={
             "User-Agent": user_agent,
             "X-Firebase-gmpid": app_id,
+            "Referer": "https://app.evelstar.com",
         })
 
         self.access_token = access_token
@@ -32,6 +33,7 @@ class FirebaseAuthClient:
         try:
             response.raise_for_status()
         except HTTPStatusError as e:
+            # Raise a custom exception with the error message from the response
             if 400 <= e.response.status_code < 500:
                 raise FirebaseException(e.response.json()["error"]["message"])
             else:
@@ -66,12 +68,12 @@ class FirebaseAuthClient:
         self.refresh_token = response_data["refresh_token"]
 
 
-async def extract_firebase_config() -> dict|None:
+def extract_firebase_config() -> dict|None:
     """
     Method that fetches the html content of the Evelstar app, finds the js index file and extracts the firebase config object
     """
-    async with AsyncClient(base_url="https://app.evelstar.com", headers={"User-Agent": BROWSER_USER_AGENT}) as client:
-        response = await client.get("/")
+    with Client(base_url="https://app.evelstar.com", headers={"User-Agent": BROWSER_USER_AGENT}, timeout=30) as client:
+        response = client.get("/")
         response.raise_for_status()
 
         # Use BeautifulSoup to parse the html content
@@ -84,34 +86,35 @@ async def extract_firebase_config() -> dict|None:
             if script_tag.attrs.get("src") and script_tag.attrs["src"].startswith("/assets/index-") and script_tag.attrs["src"].endswith(".js"):
                 index_js_url = script_tag.attrs["src"]
                 break
+        else:
+            raise ValueError("Index.js script tag not found")
 
         # Fetch the index.js file
-        response = await client.get(index_js_url)
+        response = client.get(index_js_url)
         response.raise_for_status()
 
-        # Extract the firebase config object
-        pattern = re.compile(r'firebaseConfig\s*=\s*({.*?})', re.DOTALL)
-        match = pattern.search(response.text)
+        # Search for all objects that look like the firebase config object
+        search = re.findall(r'\{[^{}]+\}', response.text)
 
-        if match:
-            config_str = match.group(1)
+        for match in search:
+            if "apiKey" in match and "authDomain" in match and "projectId" in match:
+                config_str = match
+                break
+        else:
+            raise ValueError("Firebase config object not found in index.js")
 
-            # Fix potential trailing commas and improper JSON formatting
-            config_str = re.sub(r',\s*([}\]])', r'\1', config_str)
-            config_str = re.sub(r'(`([^`]*)`)', lambda m: f'"{m.group(2).strip()}"', config_str)  # Convert template literals to strings
-            config_str = re.sub(r'(?<=[{,])(\s*[a-zA-Z_][a-zA-Z0-9_]*)(?=\s*:)', r'"\1"', config_str)  # Add quotes to keys
+        # Fix potential trailing commas and improper JSON formatting
+        config_str = re.sub(r',\s*([}\]])', r'\1', config_str)
+        config_str = re.sub(r'(`([^`]*)`)', lambda m: f'"{m.group(2).strip()}"', config_str)  # Convert template literals to strings
+        config_str = re.sub(r'(?<=[{,])(\s*[a-zA-Z_][a-zA-Z0-9_]*)(?=\s*:)', r'"\1"', config_str)  # Add quotes to keys
 
-            try:
-                config = json.loads(config_str)
-                return config
-            except json.JSONDecodeError as e:
-                raise ValueError("Error decoding JSON: " + str(e)) from e
-
-        return None
+        try:
+            config = json.loads(config_str)
+            return config
+        except json.JSONDecodeError as e:
+            raise ValueError("Error decoding JSON: " + str(e)) from e
 
 
 if __name__ == "__main__":
-    import asyncio
-    loop = asyncio.new_event_loop()
-    firebase_config = loop.run_until_complete(extract_firebase_config())
+    firebase_config = extract_firebase_config()
     print(firebase_config)
