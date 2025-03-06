@@ -51,6 +51,39 @@ class EvelstarAPIClient:
         """
         return await self.fetch("GET", "/v1/users/me")
 
+    async def get_dashboard(self) -> dict:
+        """
+        Method that fetches the user's dashboard data
+        :return: dict
+        """
+        return await self.fetch("GET", "/v1/users/dashboard")
+
+    async def get_applications(self) -> dict:
+        """
+        Method that fetches list of all applications
+        :return: dict
+        """
+        return await self.fetch("GET", "/v1/applications/all")
+
+    async def get_settlements(self, user_id: str, limit: int = 10, page: object = 1, query: str | None = None) -> dict:
+        """
+        Method that fetches the user's settlements
+        :param user_id: User ID
+        :param limit: Number of settlements per page
+        :param page: Page number
+        :param query: Query string to filter settlements
+        :return: dict
+        """
+        return await self.fetch("GET", f"/v1/users/{user_id}/settlements", params={"limit": limit, "page": page, "query": query})
+
+    async def get_settlement(self, settlement_id: str) -> dict:
+        """
+        Method that fetches the settlement data
+        :param settlement_id: Settlement ID
+        :return: dict
+        """
+        return await self.fetch("GET", f"/v1/settlements/{settlement_id}")
+
     async def get_invoices(self, limit: int = 10, page: object = 1, query: str | None = None) -> dict:
         """
         Method that fetches the user's invoices
