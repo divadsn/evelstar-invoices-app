@@ -1,4 +1,3 @@
-import json
 import re
 
 from bs4 import BeautifulSoup
@@ -12,12 +11,19 @@ class FirebaseException(Exception):
 
 
 class FirebaseAuthClient:
+    default_config = {
+        "apiKey": "AIzaSyAwFacecNjUSYlxlDdORrtQAwT0YbIYDr4",
+        "appId": "1:275592733211:web:a5317ad8e919981a3a4ebe",
+        "authDomain": "evelstar-67c55.firebaseapp.com",
+        "projectId": "evelstar-67c55",
+    }
+
     """
     Client for Firebase Auth REST API
     """
     def __init__(self, api_key: str, app_id: str, user_agent: str = BROWSER_USER_AGENT, access_token: str|None = None, refresh_token: str|None = None):
-        self._api_key = api_key
-        self._app_id = app_id
+        self._api_key = api_key or self.default_config["apiKey"]
+        self._app_id = app_id or self.default_config["appId"]
         self._client = AsyncClient(headers={
             "User-Agent": user_agent,
             "X-Firebase-gmpid": app_id,
@@ -68,7 +74,7 @@ class FirebaseAuthClient:
         self.refresh_token = response_data["refresh_token"]
 
 
-def extract_firebase_config() -> dict|None:
+def extract_firebase_config() -> dict:
     """
     Method that fetches the html content of the Evelstar app, finds the js index file and extracts the firebase config object
     """
@@ -77,7 +83,7 @@ def extract_firebase_config() -> dict|None:
         response.raise_for_status()
 
         # Use BeautifulSoup to parse the html content
-        soup = BeautifulSoup(response.text, "html.parser")
+        soup = BeautifulSoup(response.text, "lxml")
 
         # Search for all script tags and find the first that starts with index- and ends with .js
         script_tags = soup.find_all("script")
@@ -93,28 +99,17 @@ def extract_firebase_config() -> dict|None:
         response = client.get(index_js_url)
         response.raise_for_status()
 
-        # Search for all objects that look like the firebase config object
-        search = re.findall(r'\{[^{}]+\}', response.text)
+        # Initialize the firebase config object
+        config = {}
 
-        for match in search:
-            if "apiKey" in match and "authDomain" in match and "projectId" in match:
-                config_str = match
+        # Search for all key-value pairs in the js file
+        pattern = r'(\w+):"([^"]+)"'
+        matches = re.findall(pattern, response.text)
+
+        for key, value in matches:
+            if key in ("apiKey", "authDomain", "projectId", "appId"):
+                config[key] = value
+            if len(config) == 4:
                 break
-        else:
-            raise ValueError("Firebase config object not found in index.js")
 
-        # Fix potential trailing commas and improper JSON formatting
-        config_str = re.sub(r',\s*([}\]])', r'\1', config_str)
-        config_str = re.sub(r'(`([^`]*)`)', lambda m: f'"{m.group(2).strip()}"', config_str)  # Convert template literals to strings
-        config_str = re.sub(r'(?<=[{,])(\s*[a-zA-Z_][a-zA-Z0-9_]*)(?=\s*:)', r'"\1"', config_str)  # Add quotes to keys
-
-        try:
-            config = json.loads(config_str)
-            return config
-        except json.JSONDecodeError as e:
-            raise ValueError("Error decoding JSON: " + str(e)) from e
-
-
-if __name__ == "__main__":
-    firebase_config = extract_firebase_config()
-    print(firebase_config)
+        return config
